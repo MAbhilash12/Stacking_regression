@@ -7,155 +7,154 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from sklearn.metrics import (
-    r2_score,
-    mean_absolute_error,
-    mean_squared_error
+    accuracy_score,
+    precision_score,
+    recall_score,
+    f1_score,
+    confusion_matrix
 )
 
-# ---------------------------
-# PAGE CONFIG
-# ---------------------------
-
 st.set_page_config(
-    page_title="Stacking Regressor",
+    page_title="Stacking Classification",
     layout="wide"
 )
 
-st.title("🏠 House Price Prediction Using Stacking Regressor")
+st.title("❤️ Heart Disease Prediction Using Stacking Classifier")
 
-# ---------------------------
-# LOAD DATA
-# ---------------------------
+# Load Dataset
+df = pd.read_csv("data/heart_cleaned.csv")
 
-df = pd.read_csv("data/housing_cleaned.csv")
+# Load Model
+model = joblib.load(
+    "models/stacking_classifier.pkl"
+)
 
-model = joblib.load("models/stacking_model.pkl")
-columns = joblib.load("models/columns.pkl")
+columns = joblib.load(
+    "models/columns.pkl"
+)
 
-# ---------------------------
-# DATA OVERVIEW
-# ---------------------------
+# ------------------
+# DATASET HEAD
+# ------------------
 
 st.header("Dataset Head")
 
 st.dataframe(df.head())
 
+# ------------------
+# SUMMARY
+# ------------------
+
 st.header("Statistical Summary")
 
 st.dataframe(df.describe())
 
-# ---------------------------
-# VISUALIZATIONS
-# ---------------------------
+# ------------------
+# CLASS DISTRIBUTION
+# ------------------
 
-st.header("Data Visualization")
-
-col1, col2 = st.columns(2)
-
-with col1:
-
-    fig, ax = plt.subplots()
-
-    sns.histplot(
-        df["median_house_value"],
-        kde=True,
-        ax=ax
-    )
-
-    st.pyplot(fig)
-
-with col2:
-
-    fig, ax = plt.subplots()
-
-    sns.scatterplot(
-        x=df["median_income"],
-        y=df["median_house_value"],
-        ax=ax
-    )
-
-    st.pyplot(fig)
-
-# ---------------------------
-# MODEL EVALUATION
-# ---------------------------
-
-st.header("Model Evaluation")
-
-df2 = df.dropna()
-
-df2 = pd.get_dummies(
-    df2,
-    columns=["ocean_proximity"],
-    drop_first=True
-)
-
-X = df2.drop("median_house_value", axis=1)
-y = df2["median_house_value"]
-
-pred = model.predict(X)
-
-r2 = r2_score(y, pred)
-mae = mean_absolute_error(y, pred)
-rmse = np.sqrt(mean_squared_error(y, pred))
-
-c1, c2, c3 = st.columns(3)
-
-c1.metric("R² Score", f"{r2:.3f}")
-c2.metric("MAE", f"{mae:.2f}")
-c3.metric("RMSE", f"{rmse:.2f}")
-
-# ---------------------------
-# PREDICTION SECTION
-# ---------------------------
-
-st.header("Predict House Price")
-
-input_data = {}
-
-for col in columns:
-
-    if "ocean_proximity" not in col:
-
-        value = st.number_input(
-            col,
-            value=float(X[col].mean())
-        )
-
-        input_data[col] = value
-
-for col in columns:
-
-    if "ocean_proximity" in col:
-
-        input_data[col] = 0
-
-input_df = pd.DataFrame([input_data])
-
-if st.button("Predict"):
-
-    prediction = model.predict(input_df)[0]
-
-    st.success(
-        f"Predicted House Price: ${prediction:,.2f}"
-    )
-
-# ---------------------------
-# ACTUAL VS PREDICTED
-# ---------------------------
-
-st.header("Actual vs Predicted")
-
-sample_pred = model.predict(X.head(100))
+st.header("Target Distribution")
 
 fig, ax = plt.subplots()
 
-ax.scatter(
-    y.head(100),
-    sample_pred
+sns.countplot(
+    x="target",
+    data=df,
+    ax=ax
 )
 
-ax.set_xlabel("Actual")
-ax.set_ylabel("Predicted")
+st.pyplot(fig)
+
+# ------------------
+# HEATMAP
+# ------------------
+
+st.header("Correlation Heatmap")
+
+fig, ax = plt.subplots(
+    figsize=(10,8)
+)
+
+sns.heatmap(
+    df.corr(),
+    annot=True,
+    cmap="coolwarm",
+    ax=ax
+)
 
 st.pyplot(fig)
+
+# ------------------
+# EVALUATION
+# ------------------
+
+X = df.drop("target", axis=1)
+y = df["target"]
+
+y_pred = model.predict(X)
+
+acc = accuracy_score(y, y_pred)
+pre = precision_score(y, y_pred)
+rec = recall_score(y, y_pred)
+f1 = f1_score(y, y_pred)
+
+c1, c2, c3, c4 = st.columns(4)
+
+c1.metric("Accuracy", f"{acc:.3f}")
+c2.metric("Precision", f"{pre:.3f}")
+c3.metric("Recall", f"{rec:.3f}")
+c4.metric("F1 Score", f"{f1:.3f}")
+
+# ------------------
+# CONFUSION MATRIX
+# ------------------
+
+st.header("Confusion Matrix")
+
+cm = confusion_matrix(y, y_pred)
+
+fig, ax = plt.subplots()
+
+sns.heatmap(
+    cm,
+    annot=True,
+    fmt="d",
+    cmap="Blues",
+    ax=ax
+)
+
+st.pyplot(fig)
+
+# ------------------
+# USER INPUT
+# ------------------
+
+st.header("Predict Heart Disease")
+
+user_input = {}
+
+for col in columns:
+
+    value = st.number_input(
+        col,
+        value=float(X[col].mean())
+    )
+
+    user_input[col] = value
+
+input_df = pd.DataFrame([user_input])
+
+if st.button("Predict"):
+
+    pred = model.predict(input_df)[0]
+
+    prob = model.predict_proba(input_df)[0]
+
+    if pred == 1:
+        st.error(
+            f"Heart Disease Detected ({prob[1]*100:.2f}%)"
+        )
+    else:
+        st.success(
+            f"No Heart Disease ({prob[0]*100:.2f}%)"
+        )
